@@ -8,6 +8,12 @@ const cookieParser = require("cookie-parser");
 
 const config = require("./config/key");
 
+//Socket.io
+const server = require("http").createServer(app);
+const io = require("socket.io")(server);
+const { Chat } = require("./models/Chat");
+
+
 // const mongoose = require("mongoose");
 // mongoose
 //   .connect(config.mongoURI, { useNewUrlParser: true })
@@ -33,7 +39,40 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
+
+//=================================
+//            Socket.io
+//=================================
+
+io.on("connection", socket => {
+  console.log(" User is connected :) ");
+
+  socket.on("Input Chat Message", msg => {
+    // Save a message that come from the client to Mongo DB
+    connect.then(db => {
+      try {
+        let chat = new Chat({ message: msg.chatMessage, sender: msg.userID });
+
+        chat.save((err, doc) => {
+          if (err) return res.json({ succes: false, err });
+
+          Chat.find({ "_id": doc._id })
+            .populate("sender")
+            .exec((err, doc) => {
+              console.log(doc);
+              return io.emit("Output Chat Message", doc);
+            })
+        });
+
+      } catch (err) {
+        console.error(err);
+      }
+    });
+  });
+});
+
 app.use('/api/users', require('./routes/users'));
+app.use('/api/chat', require('./routes/chat'));
 
 
 //use this to show the image you have in node js server to client (react js)
@@ -55,6 +94,6 @@ if (process.env.NODE_ENV === "production") {
 
 const port = process.env.PORT || 5000
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`Server Listening on ${port}`)
 });
